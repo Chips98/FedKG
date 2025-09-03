@@ -120,7 +120,7 @@ pip install -r requirements.txt
      "algorithm": "FedKG",
      "dataset": "nyc",
      "data_mode": "space",
-     "num_clients": 15,
+     "num_clients": 10,
      "rounds": 100,
      "device": "cuda:1",
      "model_name": "SASRec",

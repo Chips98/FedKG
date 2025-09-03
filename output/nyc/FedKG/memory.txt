@@ -1,0 +1,3 @@
+communications:
+total_server_send_model_size: 53698.872089385986 mb
+total_server_recive_model_size: 21479.548835754395 mb

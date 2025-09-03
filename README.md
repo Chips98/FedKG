@@ -1,0 +1,225 @@
+# FedKG: A Federated POI Recommendation Framework for Spatial Heterogeneity
+
+## Overview
+
+FedKG is a novel federated learning framework designed to address the spatial heterogeneity challenge in Point-of-Interest (POI) recommendation systems. This project implements the methods described in our research paper, which combines **Spatio-Temporal Generative Adversarial Networks (ST-GAN)** and **Bidirectional Knowledge Distillation** to mitigate the spatial data fragmentation problem in federated POI recommendation scenarios.
+
+## Research Background
+
+Traditional centralized POI recommendation models face privacy risks when handling user trajectory data from Location-Based Social Networks (LBSNs) like Foursquare and Gowalla. While federated learning can preserve privacy, it encounters the **spatial heterogeneity** challenge: user trajectory data distributed across different geographical regions creates "geographical fragmentation" - dense data in urban clients versus sparse data in suburban clients, disrupting spatial association patterns.
+
+## Key Innovations
+
+### 1. Spatio-Temporal Generative Adversarial Network (ST-GAN)
+- **Purpose**: Repairs fragmented spatial patterns by generating high-quality synthetic trajectory data
+- **Process**: 
+  - Client pretraining: Generator learns local POI, temporal, and coordinate features
+  - Adversarial training: REINFORCE algorithm optimizes generator for realistic synthesis
+  - Data fusion: Client synthetic data for local training, server aggregates generators for global synthesis
+- **Privacy**: Only uploads generator parameters, synthetic data contains no real user information
+
+### 2. Bidirectional Knowledge Distillation
+- **Personalized Knowledge Distillation (PKD)**: Client-level, local model as teacher, global model as student
+- **Global Knowledge Distillation (GKD)**: Server-level, global model as teacher, client models as students
+- **Benefit**: Balances personalized local knowledge with global spatial knowledge
+
+## Project Structure
+
+```
+FedKG_Only/
+├── main.py                    # Main training script
+├── configs.json               # Configuration file
+├── requirements.txt           # Python dependencies
+├── README.md                 # This documentation
+├── data/                     # Dataset directory
+│   ├── processed_nyc.txt     # Processed NYC dataset
+│   ├── processed_tky.txt     # Processed Tokyo dataset
+│   ├── processed_gowalla.txt # Processed Gowalla dataset
+│   ├── processed_bk.txt      # Processed Brightkite dataset
+│   ├── nyc/                  # NYC client data splits
+│       ├── client0_data.txt  # Client 0 trajectory data
+│       ├── client1_data.txt  # Client 1 trajectory data
+│       └── ...               # More client data files
+├── gan/                      # GAN model storage
+│   └── space/
+│       └── nyc/
+│           ├── gen_client*.pth    # Client generator models
+│           ├── dis_client*.pth    # Client discriminator models
+│           └── global_generator_model.pth # Global generator
+├── logs/                     # Training logs
+└── src/
+    ├── util.py               # Utility functions (data processing, evaluation)
+    ├── models.py             # Model definitions (SASRec)
+    ├── fedoptimizer.py       # Federated optimizers
+    └── algorithms/
+        ├── FedKG/            # Core FedKG algorithm
+        │   ├── server.py     # FedKG server implementation
+        │   └── client.py     # FedKG client implementation
+        └── STGAN/            # ST-GAN implementation
+            ├── gan_trainer.py    # GAN training logic
+            ├── gan_models.py     # Generator and discriminator models
+            ├── helpers.py        # GAN helper functions
+            ├── utils.py          # GAN utilities
+            └── data_setting.py   # Data preprocessing for GAN
+```
+
+## Dataset Format
+
+### Input Data Format
+Each trajectory data file contains tab-separated values with the following columns:
+```
+user_id	poi_id	category_id	category_name	latitude	longitude	timezone_offset	timestamp
+```
+
+**Example from `data/nyc/client0_data.txt`:**
+```
+17	3134	303	Neighborhood	40.75951304689015	-73.83147239685059	-240	2012-04-03T18:57:46Z
+17	4485	7	Home (private)	40.73569746375886	-73.81249842275241	-240	2012-04-03T20:04:26Z
+17	584	261	Hotel	40.7526195459056	-73.99336294005377	-240	2012-04-09T16:19:31Z
+```
+
+### Field Descriptions
+- **user_id**: Unique identifier for each user
+- **poi_id**: Unique identifier for each Point of Interest
+- **category_id**: Numerical category identifier
+- **category_name**: Human-readable category name
+- **latitude**: GPS latitude coordinate
+- **longitude**: GPS longitude coordinate  
+- **timezone_offset**: Timezone offset in minutes
+- **timestamp**: ISO format timestamp
+
+### Data Organization
+- **Raw datasets**: `data/processed_{dataset}.txt` - Complete datasets
+- **Client data**: `data/{dataset}/client{id}_data.txt` - Individual client data splits
+- **Augmented data**: Generated by ST-GAN for data augmentation
+- **Merged data**: Combination of original and augmented data for training
+
+## Requirements
+
+### Dependencies
+- Python 3.7+
+- PyTorch 1.8+
+- NumPy 1.19+
+- Pandas 1.2+
+- tqdm 4.60+
+- scikit-learn 0.24+
+
+### Installation
+```bash
+pip install -r requirements.txt
+```
+
+## Usage
+
+### Basic Training
+
+1. **Configure Experiment**
+   Edit `configs.json` or create your own configuration:
+   ```json
+   {
+     "algorithm": "FedKG",
+     "dataset": "nyc",
+     "data_mode": "space",
+     "num_clients": 15,
+     "rounds": 100,
+     "device": "cuda:1",
+     "model_name": "SASRec",
+     "maxlen": 100,
+     "hidden_units": 50,
+     "pretrain_gan": "True",
+     "generate_aug_data": "True",
+     "use_KD": "True"
+   }
+   ```
+
+2. **Run Training**
+   ```bash
+   conda activate oasis
+   python main.py --config_path configs.json
+   ```
+
+### Key Configuration Parameters
+
+#### Algorithm Settings
+- `algorithm`: "FedKG" - The federated learning algorithm
+- `dataset`: Dataset name ("nyc", "tky", "gowalla", "bk")
+- `data_mode`: Data processing mode ("space" for spatial heterogeneity)
+- `num_clients`: Number of federated clients
+- `rounds`: Number of communication rounds
+- `jr`: Client participation rate (0.4 = 40% participation)
+
+#### Model Settings
+- `model_name`: Base recommendation model ("SASRec")
+- `maxlen`: Maximum sequence length for user trajectories
+- `hidden_units`: Hidden dimension size
+- `client_epochs`: Local training epochs per round
+- `lr`: Learning rate
+
+#### ST-GAN Settings
+- `pretrain_gan`: Whether to pretrain ST-GAN ("True"/"False")
+- `generate_aug_data`: Whether to generate augmented data ("True"/"False")
+- `local_n_users`: Number of local synthetic users per client
+- `global_n_users`: Number of global synthetic users
+- `mle_train_epochs`: MLE pretraining epochs for generator
+- `dis_train_epochs`: Discriminator training epochs
+- `adv_train_epochs`: Adversarial training epochs
+
+#### Knowledge Distillation Settings
+- `use_KD`: Enable knowledge distillation ("True"/"False")
+- `lamda`: Weight for personalized knowledge distillation loss
+- `nor_lamda`: Weight for global knowledge distillation loss
+- `T`: Temperature parameter for knowledge distillation
+- `kd_epochs`: Knowledge distillation training epochs
+
+## Training Process
+
+The FedKG training follows this iterative process:
+
+1. **ST-GAN Pretraining**: Each client trains local ST-GAN on private data
+2. **Generator Aggregation**: Server aggregates client generators to create global generator
+3. **Data Augmentation**: Generate synthetic trajectories using global and local generators
+4. **Federated Training Loop**:
+   - Clients perform local updates with augmented data
+   - Server applies global knowledge distillation
+   - Server aggregates client models
+   - Clients receive updated global model and apply personalized knowledge distillation
+
+## Output Structure
+
+Training generates organized output files:
+
+```
+output/Results_{data_mode}_{timestamp}/{dataset}/{algorithm}_{num_clients}/
+├── server/
+│   ├── best_performance.txt      # Best performance metrics
+│   └── all_rounds_results.csv    # Performance history
+├── final_test/
+│   └── client/
+│       └── client[*]_results.csv # Individual client results
+├── model_weight/
+│   └── server/
+│       └── last_round_server_model.pt # Final model
+├── time.txt                      # Training time statistics
+└── memory.txt                    # Communication cost statistics
+```
+
+## Evaluation Metrics
+
+The framework evaluates performance using standard recommendation metrics:
+
+- **NDCG@K**: Normalized Discounted Cumulative Gain (K=5,10,20)
+- **HR@K**: Hit Ratio (K=5,10,20)
+
+These metrics assess both ranking quality and retrieval effectiveness for POI recommendation.
+
+## Experimental Features
+
+### Robustness Testing
+- **Participation Rate**: Configure client participation with `jr` parameter
+- **Data Sparsity**: Evaluate performance across different data distributions
+- **Convergence Analysis**: Monitor training stability and convergence speed
+
+
+## License
+
+This project is licensed under the MIT License.
